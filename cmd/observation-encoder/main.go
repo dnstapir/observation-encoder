@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	//"github.com/nats-io/nats.go"
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/dnstapir/observation-encoder/internal/api"
 	"github.com/dnstapir/observation-encoder/internal/app"
 	"github.com/dnstapir/observation-encoder/internal/cert"
@@ -18,14 +20,13 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/logger"
 )
 
-/* Rewritten if building with make */
-var version = "BAD-BUILD"
 var commit = "BAD-BUILD"
 
 type conf struct {
 	app.Conf
-	Api  api.Conf
-	Cert cert.Conf `json:"cert"`
+	Debug bool      `toml:"debug"`
+	Api   api.Conf  `toml:"api"`
+	Cert  cert.Conf `toml:"cert"`
 }
 
 func main() {
@@ -41,7 +42,7 @@ func main() {
 	)
 	flag.StringVar(&configFile,
 		"config",
-		"",
+		"config.toml",
 		"Configuration file to use",
 	)
 	flag.BoolVar(&debugFlag,
@@ -59,12 +60,10 @@ func main() {
 		panic(fmt.Sprintf("Could not create logger, err: '%s'", err))
 	}
 
-	log.Info("observation-encoder version: '%s', commit: '%s'", version, commit)
+	log.Info("observation-encoder, commit: '%s'", commit)
 	if runVersionCmd {
 		os.Exit(0)
 	}
-
-	log.Debug("Debug logging enabled")
 
 	if configFile == "" {
 		log.Error("No config file specified, exiting...")
@@ -78,7 +77,7 @@ func main() {
 	}
 	defer file.Close()
 
-	confDecoder := json.NewDecoder(file)
+	confDecoder := toml.NewDecoder(file)
 	if confDecoder == nil {
 		log.Error("Problem decoding config file '%s', exiting...", configFile)
 		os.Exit(-1)
@@ -88,21 +87,32 @@ func main() {
 	confDecoder.Decode(&mainConf)
 	file.Close() // TODO okay to close here while also using defer above?
 
-	mainConf.Log = log
+	// TODO create different loggers with different debug settings
+	applog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating app log: %s", err)
+	} else {
+		applog.Debug("Debug logging enabled")
+	}
+
+	mainConf.Log = applog
 	appHandle, err := app.Create(mainConf.Conf)
 	if err != nil {
 		log.Error("Error creating application: '%s'", err)
 		os.Exit(-1)
 	}
 
-	mainConf.Cert.Log = log
+	mainConf.Cert.Log = applog
 	certHandle, err := cert.Create(mainConf.Cert)
 	if err != nil {
 		log.Error("Error creating cert manager: '%s'", err)
 		os.Exit(-1)
 	}
 
-	mainConf.Api.Log = log
+	mainConf.Api.Log = applog
 	mainConf.Api.App = appHandle
 	mainConf.Api.Certs = certHandle
 	apiHandle, err := api.Create(mainConf.Api)
@@ -119,10 +129,14 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	exitCh := make(chan common.Exit)
 
+	log.Info("Starting threads...")
+
 	go appHandle.Run(ctx, exitCh)
 
 	go apiHandle.Run(ctx, exitCh)
 	go certHandle.Run(ctx, exitCh)
+
+	log.Info("Threads started!")
 
 	exitLoop := false
 	var wg sync.WaitGroup

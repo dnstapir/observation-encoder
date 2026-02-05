@@ -13,8 +13,8 @@ const c_N_HANDLERS = 3
 
 type Conf struct {
 	Log     common.Logger
-	Address string `json:"address"`
-	Port    string `json:"port"`
+	Address string `toml:"address"`
+	Port    string `toml:"port"`
 }
 
 type appHandle struct {

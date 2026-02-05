@@ -14,9 +14,9 @@ import (
 )
 
 type Conf struct {
-	Active  bool   `json:"active"`
-	Address string `json:"address"`
-	Port    string `json:"port"`
+	Active  bool   `toml:"active"`
+	Address string `toml:"address"`
+	Port    string `toml:"port"`
 	Log     common.Logger
 	App     appHandle
 	Certs   certHandle

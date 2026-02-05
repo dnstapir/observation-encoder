@@ -17,8 +17,8 @@ import (
 
 type Conf struct {
 	Log      common.Logger
-	Interval int    `json:"interval"`
-	CertDir  string `json:"cert_dir"`
+	Interval int    `toml:"interval"`
+	CertDir  string `toml:"cert_dir"`
 }
 
 type certHandle struct {
