@@ -15,21 +15,21 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/api"
 	"github.com/dnstapir/observation-encoder/internal/app"
 	"github.com/dnstapir/observation-encoder/internal/cert"
-	"github.com/dnstapir/observation-encoder/internal/nats"
 	"github.com/dnstapir/observation-encoder/internal/common"
 	"github.com/dnstapir/observation-encoder/internal/libtapir"
 	"github.com/dnstapir/observation-encoder/internal/logger"
+	"github.com/dnstapir/observation-encoder/internal/nats"
 )
 
 var commit = "BAD-BUILD"
 
 type conf struct {
 	app.Conf
-	Debug bool      `toml:"debug"`
-	Api   api.Conf  `toml:"api"`
-	Cert  cert.Conf `toml:"cert"`
-    Nats  nats.Conf `toml:"nats"`
-    Libtapir  libtapir.Conf `toml:"libtapir"`
+	Debug    bool          `toml:"debug"`
+	Api      api.Conf      `toml:"api"`
+	Cert     cert.Conf     `toml:"cert"`
+	Nats     nats.Conf     `toml:"nats"`
+	Libtapir libtapir.Conf `toml:"libtapir"`
 }
 
 func main() {
@@ -90,13 +90,13 @@ func main() {
 	confDecoder.Decode(&mainConf)
 	file.Close() // TODO okay to close here while also using defer above?
 
-    debugFlag = debugFlag || mainConf.Debug
+	debugFlag = debugFlag || mainConf.Debug
 
-    /*
-     ******************************************************************
-     ********************** SET UP NATS *******************************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** SET UP NATS *******************************
+	 ******************************************************************
+	 */
 	natslog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Nats.Debug,
@@ -105,18 +105,18 @@ func main() {
 		log.Error("Error creating nats log: %s", err)
 	}
 
-    mainConf.Nats.Log = natslog
-    natsHandle, err := nats.Create(mainConf.Nats)
-    if err != nil {
-        log.Error("Could not create NATS handle: %s", err)
-        os.Exit(-1)
-    }
+	mainConf.Nats.Log = natslog
+	natsHandle, err := nats.Create(mainConf.Nats)
+	if err != nil {
+		log.Error("Could not create NATS handle: %s", err)
+		os.Exit(-1)
+	}
 
-    /*
-     ******************************************************************
-     ********************** SET UP LIBTAPIR ***************************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** SET UP LIBTAPIR ***************************
+	 ******************************************************************
+	 */
 	libtapirlog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Libtapir.Debug,
@@ -125,18 +125,18 @@ func main() {
 		log.Error("Error creating libtapir log: %s", err)
 	}
 
-    mainConf.Libtapir.Log = libtapirlog
-    libtapirHandle, err := libtapir.Create(mainConf.Libtapir)
-    if err != nil {
-        log.Error("Could not create libtapir handle: %s", err)
-        os.Exit(-1)
-    }
+	mainConf.Libtapir.Log = libtapirlog
+	libtapirHandle, err := libtapir.Create(mainConf.Libtapir)
+	if err != nil {
+		log.Error("Could not create libtapir handle: %s", err)
+		os.Exit(-1)
+	}
 
-    /*
-     ******************************************************************
-     ********************** SET UP MAIN APP ***************************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** SET UP MAIN APP ***************************
+	 ******************************************************************
+	 */
 	applog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Debug,
@@ -146,19 +146,19 @@ func main() {
 	}
 
 	mainConf.Log = applog
-    mainConf.NatsHandle = natsHandle
-    mainConf.LibtapirHandle = libtapirHandle
+	mainConf.NatsHandle = natsHandle
+	mainConf.LibtapirHandle = libtapirHandle
 	appHandle, err := app.Create(mainConf.Conf)
 	if err != nil {
 		log.Error("Error creating application: '%s'", err)
 		os.Exit(-1)
 	}
 
-    /*
-     ******************************************************************
-     ********************** SET UP CERT HANDLER ***********************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** SET UP CERT HANDLER ***********************
+	 ******************************************************************
+	 */
 	certlog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Cert.Debug,
@@ -174,11 +174,11 @@ func main() {
 		os.Exit(-1)
 	}
 
-    /*
-     ******************************************************************
-     ********************** SET UP API ********************************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** SET UP API ********************************
+	 ******************************************************************
+	 */
 	apilog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Api.Debug,
@@ -195,11 +195,11 @@ func main() {
 		os.Exit(-1)
 	}
 
-    /*
-     ******************************************************************
-     ********************** START RUNNING STUFF ***********************
-     ******************************************************************
-     */
+	/*
+	 ******************************************************************
+	 ********************** START RUNNING STUFF ***********************
+	 ******************************************************************
+	 */
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer close(sigChan)

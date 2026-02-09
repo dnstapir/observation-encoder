@@ -3,9 +3,9 @@ package nats
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"time"
-    "slices"
-    "strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -18,22 +18,22 @@ const c_NATS_GLOB = common.NATS_GLOB
 const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
-    Url           string `toml:"url"`
+	Url           string `toml:"url"`
 	Debug         bool   `toml:"debug"`
-    Bucket        string `toml:"bucket"`
-    SubjectPrefix string `toml:"subject_prefix"`
-    Ttl           int    `toml:"ttl"`
+	Bucket        string `toml:"bucket"`
+	SubjectPrefix string `toml:"subject_prefix"`
+	Ttl           int    `toml:"ttl"`
 	Log           common.Logger
 }
 
 type natsClient struct {
-	log        common.Logger
-	url        string
-	queue      string
-    bucket        string
-    subjectPrefix string
-    ttl           time.Duration
-	kv         jetstream.KeyValue
+	log           common.Logger
+	url           string
+	queue         string
+	bucket        string
+	subjectPrefix string
+	ttl           time.Duration
+	kv            jetstream.KeyValue
 }
 
 func Create(conf Conf) (*natsClient, error) {
@@ -46,22 +46,21 @@ func Create(conf Conf) (*natsClient, error) {
 	}
 	nc.log = conf.Log
 
-    if conf.Bucket == "" {
-        return nil, errors.New("no bucket name")
-    }
+	if conf.Bucket == "" {
+		return nil, errors.New("no bucket name")
+	}
 
-    if conf.SubjectPrefix == "" {
-        return nil, errors.New("no subject prefix")
-    }
+	if conf.SubjectPrefix == "" {
+		return nil, errors.New("no subject prefix")
+	}
 
-    if conf.Ttl == 0 {
-        return nil, errors.New("zero ttl")
-    }
+	if conf.Ttl == 0 {
+		return nil, errors.New("zero ttl")
+	}
 
-
-    nc.bucket        = conf.Bucket
-    nc.subjectPrefix = strings.Trim(conf.SubjectPrefix, c_NATS_DELIM)
-    nc.ttl = time.Duration(conf.Ttl) * time.Second
+	nc.bucket = conf.Bucket
+	nc.subjectPrefix = strings.Trim(conf.SubjectPrefix, c_NATS_DELIM)
+	nc.ttl = time.Duration(conf.Ttl) * time.Second
 
 	err := nc.initNats()
 	if err != nil {
@@ -73,20 +72,20 @@ func Create(conf Conf) (*natsClient, error) {
 }
 
 func (nc *natsClient) RemovePrefix(subject string) string {
-     subjectCut, ok := strings.CutPrefix(subject, nc.subjectPrefix)
-     if !ok {
-         nc.log.Warning("Subject '%s' missing prefix '%s'", subject, nc.subjectPrefix)
-     }
+	subjectCut, ok := strings.CutPrefix(subject, nc.subjectPrefix)
+	if !ok {
+		nc.log.Warning("Subject '%s' missing prefix '%s'", subject, nc.subjectPrefix)
+	}
 
-     return subjectCut
+	return subjectCut
 }
 
 func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.NatsMsg, error) {
-    subjectParts := []string{nc.subjectPrefix, c_NATS_GLOB}
-    subject := strings.Join(subjectParts, c_NATS_DELIM)
-    w, err := nc.kv.Watch(ctx, subject)
+	subjectParts := []string{nc.subjectPrefix, c_NATS_GLOB}
+	subject := strings.Join(subjectParts, c_NATS_DELIM)
+	w, err := nc.kv.Watch(ctx, subject)
 	if err != nil {
-        nc.log.Error("Couldn't watch: %s", err)
+		nc.log.Error("Couldn't watch: %s", err)
 		return nil, err
 	}
 
@@ -94,14 +93,14 @@ func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.Nats
 	go func() {
 		nc.log.Info("Starting NATS listener loop")
 		for val := range w.Updates() {
-            if val == nil {
-                continue
-            }
+			if val == nil {
+				continue
+			}
 			nc.log.Debug("Incoming NATS KV update on '%s'!", val.Key())
-			natsMsg := common.NatsMsg {
+			natsMsg := common.NatsMsg{
 				Headers: nil,
 				Data:    val.Value(),
-                Subject: val.Key(),
+				Subject: val.Key(),
 			}
 			outCh <- natsMsg
 		}
@@ -114,31 +113,31 @@ func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.Nats
 }
 
 func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint32, error) {
-    domSplit := strings.Split(strings.Trim(domain, c_NATS_DELIM), c_NATS_DELIM)
-    slices.Reverse(domSplit)
-    domRev := strings.Join(domSplit, c_NATS_DELIM)
+	domSplit := strings.Split(strings.Trim(domain, c_NATS_DELIM), c_NATS_DELIM)
+	slices.Reverse(domSplit)
+	domRev := strings.Join(domSplit, c_NATS_DELIM)
 
-    subjectParts := []string{nc.subjectPrefix, c_NATS_WILDCARD, domRev}
-    subject := strings.Join(subjectParts, c_NATS_DELIM)
-    ls, err := nc.kv.ListKeysFiltered(ctx, subject)
-    if err != nil {
-        nc.log.Error("Couldn't list keys for %s: %s", domain, err)
-        return 0, err
-    }
+	subjectParts := []string{nc.subjectPrefix, c_NATS_WILDCARD, domRev}
+	subject := strings.Join(subjectParts, c_NATS_DELIM)
+	ls, err := nc.kv.ListKeysFiltered(ctx, subject)
+	if err != nil {
+		nc.log.Error("Couldn't list keys for %s: %s", domain, err)
+		return 0, err
+	}
 
-    var obs uint32
-    for k := range ls.Keys() {
-        kSplit := strings.Split(k, c_NATS_DELIM)
-        flag := kSplit[1] // TODO avoid magic values
-        flagUint, ok := common.OBS_MAP[flag]
-        if !ok {
-            nc.log.Warning("Unrecognized flag '%s', ignoring...")
-            continue
-        }
-        obs |= flagUint
-    }
+	var obs uint32
+	for k := range ls.Keys() {
+		kSplit := strings.Split(k, c_NATS_DELIM)
+		flag := kSplit[1] // TODO avoid magic values
+		flagUint, ok := common.OBS_MAP[flag]
+		if !ok {
+			nc.log.Warning("Unrecognized flag '%s', ignoring...")
+			continue
+		}
+		obs |= flagUint
+	}
 
-    return obs, nil
+	return obs, nil
 }
 
 func (nc *natsClient) initNats() error {
@@ -172,6 +171,6 @@ func (nc *natsClient) initNats() error {
 }
 
 func (nc *natsClient) Shutdown() error {
-    // TODO impl
-    return nil
+	// TODO impl
+	return nil
 }

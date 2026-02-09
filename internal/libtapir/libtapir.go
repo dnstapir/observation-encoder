@@ -10,8 +10,8 @@ import (
 )
 
 type Conf struct {
-	Log common.Logger
-    Debug bool `toml:"debug"`
+	Log   common.Logger
+	Debug bool `toml:"debug"`
 }
 
 type libtapir struct {
@@ -21,10 +21,10 @@ type libtapir struct {
 func Create(conf Conf) (*libtapir, error) {
 	lt := new(libtapir)
 	if conf.Log == nil {
-        return nil, common.ErrBadHandle
+		return nil, common.ErrBadHandle
 	}
 
-    lt.log = conf.Log
+	lt.log = conf.Log
 
 	return lt, nil
 }

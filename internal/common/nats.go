@@ -7,7 +7,6 @@ const NATS_WILDCARD = "*"
 const NATS_GLOB = ">"
 const NATS_DELIM = "."
 
-
 var NATSHEADERS_DNSTAPIR_ALL = []string{
 	NATSHEADER_KEY_IDENTIFIER,
 	NATSHEADER_KEY_THUMBPRINT,
@@ -15,6 +14,6 @@ var NATSHEADERS_DNSTAPIR_ALL = []string{
 
 type NatsMsg struct {
 	Headers map[string]string
-    Subject string
+	Subject string
 	Data    []byte
 }
