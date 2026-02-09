@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"net"
 	"sync/atomic"
 
 	"github.com/dnstapir/observation-encoder/internal/common"
@@ -15,11 +13,13 @@ type Conf struct {
 	Log     common.Logger
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
+    NatsHandle    nats
 }
 
 type appHandle struct {
 	id      string
 	log     common.Logger
+    natsHandle nats
 	address string
 	port    string
 	exitCh  chan<- common.Exit
@@ -27,17 +27,26 @@ type appHandle struct {
 }
 
 type pm struct {
-	pingCount atomic.Int64
+	natsInCount atomic.Int64
 }
 
 type job struct {
-	conn net.Conn
+    msg common.NatsMsg
+}
+
+type nats interface {
+	WatchBucket(context.Context) (<-chan common.NatsMsg, error)
+    Shutdown() error
 }
 
 func Create(conf Conf) (*appHandle, error) {
 	a := new(appHandle)
 
 	if conf.Log == nil {
+		return nil, common.ErrBadHandle
+	}
+
+	if conf.NatsHandle == nil {
 		return nil, common.ErrBadHandle
 	}
 
@@ -53,6 +62,7 @@ func Create(conf Conf) (*appHandle, error) {
 	a.address = conf.Address
 	a.port = conf.Port
 	a.id = "main app"
+    a.natsHandle = conf.NatsHandle
 
 	return a, nil
 }
@@ -62,6 +72,13 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	a.exitCh = exitCh
 	jobChan := make(chan job, 10)
 
+    natsInCh, err := a.natsHandle.WatchBucket(ctx)
+    if err != nil {
+        a.log.Error("Error connecting to NATS: %s", err)
+	    a.exitCh <- common.Exit{ID: a.id, Err: err}
+        return
+    }
+
 	for range c_N_HANDLERS {
 		go func() {
 			for j := range jobChan {
@@ -70,73 +87,43 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 		}()
 	}
 
-	l, err := net.Listen("tcp", net.JoinHostPort(a.address, a.port))
-	if err != nil {
-		a.log.Error("Error creating tcp listener: '%s'", err)
-		a.exitCh <- common.Exit{ID: a.id, Err: common.ErrFatal}
-		return
+    MAIN_APP_LOOP:
+	for {
+		select {
+		case msg := <-natsInCh:
+		    a.pm.natsInCount.Add(1)
+            j := job {
+                msg: msg,
+            }
+            jobChan <- j
+        case <-ctx.Done():
+			a.log.Info("Stopping main worker thread")
+			break MAIN_APP_LOOP
+		}
 	}
 
-	a.log.Info("Starting tcp listener loop")
-	go func() {
-		for {
-			conn, err := l.Accept()
-			if errors.Is(err, net.ErrClosed) {
-				a.log.Info("Socket closed, listener terminating")
-				break
-			} else if err != nil {
-				a.log.Error("Failed to accept connection '%s'", err)
-				continue
-			}
-
-			jobChan <- job{conn: conn}
-			a.log.Debug("Connection passed to handler")
-		}
-	}()
-
-	<-ctx.Done()
-	a.log.Info("Stopping listener thread")
-	l.Close()
-
 	for len(jobChan) > 0 {
-		j := <-jobChan
-		j.conn.Close()
+		<-jobChan
 	}
 	close(jobChan)
 
-	a.exitCh <- common.Exit{ID: a.id, Err: nil}
+    err = a.natsHandle.Shutdown()
+    if err != nil {
+        a.log.Error("Encountered '%s' during NATS shutdown", err)
+    }
+
+	a.exitCh <- common.Exit{ID: a.id, Err: err}
 	a.log.Info("Main app shutdown done")
 	return
 }
 
 func (a *appHandle) handleJob(j job) {
-	c := j.conn
-	defer c.Close()
-
-	bufsize := 100
-	buf := make([]byte, bufsize) // TODO make configurable
-	n, err := c.Read(buf)
-	if err != nil {
-		a.log.Error("Error handling connection, closing")
-		return
-	}
-
-	a.log.Debug("Received data '%s'", string(buf[:n]))
-
-	msg := string(buf[:n])
-	if msg == "ping\r\n" {
-
-		a.pm.pingCount.Add(1)
-		_, err := c.Write([]byte("pong\r\n"))
-		if err != nil {
-			a.log.Error("Error responding to ping, closing")
-			return
-		}
-	}
+    a.log.Info("Got message on subject '%s'", j.msg.Subject)
+    // TODO impl
 
 	return
 }
 
-func (a *appHandle) GetPingCount() int64 {
-	return a.pm.pingCount.Load()
+func (a *appHandle) GetNatsInCount() int64 {
+	return a.pm.natsInCount.Load()
 }
