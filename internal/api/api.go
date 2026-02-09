@@ -15,6 +15,7 @@ import (
 
 type Conf struct {
 	Active  bool   `toml:"active"`
+    Debug    bool  `toml:"debug"`
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
 	Log     common.Logger

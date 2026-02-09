@@ -11,8 +11,10 @@ const c_N_HANDLERS = 3
 
 type Conf struct {
 	Log     common.Logger
+	Debug   bool `toml:"debug"`
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
+    SubjectPrefix string `toml:"subject_prefix"`
     NatsHandle    nats
 }
 
@@ -22,6 +24,7 @@ type appHandle struct {
     natsHandle nats
 	address string
 	port    string
+	subjectPrefix    string
 	exitCh  chan<- common.Exit
 	pm
 }
@@ -35,7 +38,7 @@ type job struct {
 }
 
 type nats interface {
-	WatchBucket(context.Context) (<-chan common.NatsMsg, error)
+	WatchBucket(context.Context, string) (<-chan common.NatsMsg, error)
     Shutdown() error
 }
 
@@ -58,11 +61,17 @@ func Create(conf Conf) (*appHandle, error) {
 		return nil, common.ErrBadParam
 	}
 
+	if conf.SubjectPrefix == "" {
+        // TODO make sure is valid NATS subject
+		return nil, common.ErrBadParam
+	}
+
 	a.log = conf.Log
 	a.address = conf.Address
 	a.port = conf.Port
 	a.id = "main app"
     a.natsHandle = conf.NatsHandle
+    a.subjectPrefix = conf.SubjectPrefix
 
 	return a, nil
 }
@@ -72,7 +81,7 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	a.exitCh = exitCh
 	jobChan := make(chan job, 10)
 
-    natsInCh, err := a.natsHandle.WatchBucket(ctx)
+    natsInCh, err := a.natsHandle.WatchBucket(ctx, a.subjectPrefix)
     if err != nil {
         a.log.Error("Error connecting to NATS: %s", err)
 	    a.exitCh <- common.Exit{ID: a.id, Err: err}
@@ -119,7 +128,6 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 
 func (a *appHandle) handleJob(j job) {
     a.log.Info("Got message on subject '%s'", j.msg.Subject)
-    // TODO impl
 
 	return
 }

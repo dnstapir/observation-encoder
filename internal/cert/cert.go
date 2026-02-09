@@ -17,6 +17,7 @@ import (
 
 type Conf struct {
 	Log      common.Logger
+    Debug    bool   `toml:"debug"`
 	Interval int    `toml:"interval"`
 	CertDir  string `toml:"cert_dir"`
 }

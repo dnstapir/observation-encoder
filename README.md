@@ -21,6 +21,7 @@ observation-encoder -config /path/to/config/file
 ```toml
 address = "127.0.0.1"
 port = "10000"
+subject_prefix = "observations"
 
 [cert]
 interval = 100
@@ -32,7 +33,5 @@ address = "127.0.0.1"
 port = "10001"
 
 [nats]
-watch_subject = "test.observations.*.>"
-out_subject = "test.observations.down"
 url = "nats://127.0.0.1:4222"
 ```

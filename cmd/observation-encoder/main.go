@@ -88,6 +88,8 @@ func main() {
 	confDecoder.Decode(&mainConf)
 	file.Close() // TODO okay to close here while also using defer above?
 
+    debugFlag = debugFlag || mainConf.Debug
+
     /*
      ******************************************************************
      ********************** SET UP NATS *******************************
@@ -121,8 +123,6 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating app log: %s", err)
-	} else {
-		applog.Debug("Debug logging enabled")
 	}
 
 	mainConf.Log = applog
@@ -138,7 +138,15 @@ func main() {
      ********************** SET UP CERT HANDLER ***********************
      ******************************************************************
      */
-	mainConf.Cert.Log = applog
+	certlog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Cert.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating cert log: %s", err)
+	}
+
+	mainConf.Cert.Log = certlog
 	certHandle, err := cert.Create(mainConf.Cert)
 	if err != nil {
 		log.Error("Error creating cert manager: '%s'", err)
@@ -150,7 +158,14 @@ func main() {
      ********************** SET UP API ********************************
      ******************************************************************
      */
-	mainConf.Api.Log = applog
+	apilog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Api.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating API log: %s", err)
+	}
+	mainConf.Api.Log = apilog
 	mainConf.Api.App = appHandle
 	mainConf.Api.Certs = certHandle
 	apiHandle, err := api.Create(mainConf.Api)

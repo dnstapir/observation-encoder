@@ -16,8 +16,6 @@ const c_DEFAULT_TTL = 60             /* seconds */ // TODO make configurable
 
 type Conf struct {
     Url        string `toml:"url"`
-	OutSubject string `toml:"out_subject"`
-	WatchSubject  string `toml:"watch_subject"`
 	Debug         bool `toml:"debug"`
 	Log        common.Logger
 }
@@ -25,8 +23,6 @@ type Conf struct {
 type natsClient struct {
 	log        common.Logger
 	url        string
-	outSubject string
-	watchSubject  string
 	queue      string
 	kv         jetstream.KeyValue
 }
@@ -41,12 +37,6 @@ func Create(conf Conf) (*natsClient, error) {
 	}
 	nc.log = conf.Log
 
-	if conf.OutSubject == "" || conf.WatchSubject == "" {
-		return nil, errors.New("bad nats subject")
-	}
-	nc.outSubject = conf.OutSubject
-	nc.watchSubject = conf.WatchSubject
-
 	err := nc.initNats()
 	if err != nil {
 		nc.log.Error("Error initializing NATS")
@@ -56,10 +46,11 @@ func Create(conf Conf) (*natsClient, error) {
 	return nc, nil
 }
 
-func (nc *natsClient) WatchBucket(ctx context.Context) (<-chan common.NatsMsg, error) {
-    w, err := nc.kv.Watch(ctx, nc.watchSubject)
+func (nc *natsClient) WatchBucket(ctx context.Context, prefix string) (<-chan common.NatsMsg, error) {
+    watchSubject := prefix + ".*.>"
+    w, err := nc.kv.Watch(ctx, watchSubject)
 	if err != nil {
-        nc.log.Error("Couldn't watch '%s': %s", nc.watchSubject, err)
+        nc.log.Error("Couldn't watch '%s': %s", watchSubject, err)
 		return nil, err
 	}
 
@@ -81,7 +72,7 @@ func (nc *natsClient) WatchBucket(ctx context.Context) (<-chan common.NatsMsg, e
 		close(outCh)
 	}()
 
-	nc.log.Info("Watching subject '%s'", nc.watchSubject)
+	nc.log.Info("Watching subject '%s'", watchSubject)
 
 	return outCh, nil
 }
