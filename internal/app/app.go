@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+    "slices"
+    "strings"
 	"sync/atomic"
 
 	"github.com/dnstapir/observation-encoder/internal/common"
@@ -39,6 +41,7 @@ type job struct {
 
 type nats interface {
 	WatchBucket(context.Context, string) (<-chan common.NatsMsg, error)
+    GetObservations(context.Context, string) (uint32, error)
     Shutdown() error
 }
 
@@ -91,7 +94,7 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	for range c_N_HANDLERS {
 		go func() {
 			for j := range jobChan {
-				a.handleJob(j)
+				a.handleJob(ctx, j)
 			}
 		}()
 	}
@@ -126,8 +129,29 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	return
 }
 
-func (a *appHandle) handleJob(j job) {
+func (a *appHandle) handleJob(ctx context.Context, j job) {
     a.log.Info("Got message on subject '%s'", j.msg.Subject)
+
+    domainRev, ok := strings.CutPrefix(j.msg.Subject, a.subjectPrefix)
+    if !ok {
+        a.log.Warning("Prefix mismatch for incoming msg subject, dropping...")
+        return
+    }
+    domainSplit := strings.Split(domainRev, ".")
+    // TODO check split is not too short
+    slices.Reverse(domainSplit)
+
+    domain := strings.Join(domainSplit[:len(domainSplit)-2], ".")
+
+    a.log.Debug("Extracted domain '%s'", domain)
+
+    obs, err := a.natsHandle.GetObservations(ctx, domain)
+    if err != nil {
+        a.log.Error("Could not get observations for %s: %s", domain, err)
+        return
+    }
+
+    a.log.Debug("%s has observation vector %d", domain, obs)
 
 	return
 }

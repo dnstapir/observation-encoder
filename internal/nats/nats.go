@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"time"
+    "slices"
+    "strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
@@ -15,9 +17,11 @@ const c_BUCKET_NAME = "obs_bucket" // TODO make configurable
 const c_DEFAULT_TTL = 60             /* seconds */ // TODO make configurable
 
 type Conf struct {
-    Url        string `toml:"url"`
+    Url           string `toml:"url"`
 	Debug         bool `toml:"debug"`
-	Log        common.Logger
+    Bucket        string `toml:"bucket"` // TODO use
+    SubjectPrefix string `toml:"subject_prefix"` // TODO use
+	Log           common.Logger
 }
 
 type natsClient struct {
@@ -75,6 +79,32 @@ func (nc *natsClient) WatchBucket(ctx context.Context, prefix string) (<-chan co
 	nc.log.Info("Watching subject '%s'", watchSubject)
 
 	return outCh, nil
+}
+
+func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint32, error) {
+    domSplit := strings.Split(strings.Trim(domain, "."), ".")
+    slices.Reverse(domSplit)
+    domRev := strings.Join(domSplit, ".")
+
+    ls, err := nc.kv.ListKeysFiltered(ctx, "observations.*." + domRev) // TODO use subject prefix
+    if err != nil {
+        nc.log.Error("Couldn't list keys for %s: %s", domain, err)
+        return 0, err
+    }
+
+    var obs uint32
+    for k := range ls.Keys() {
+        kSplit := strings.Split(k, ".")
+        flag := kSplit[1] // TODO avoid magic values
+        flagUint, ok := common.OBS_MAP[flag]
+        if !ok {
+            nc.log.Warning("Unrecognized flag '%s', ignoring...")
+            continue
+        }
+        obs |= flagUint
+    }
+
+    return obs, nil
 }
 
 func (nc *natsClient) initNats() error {
