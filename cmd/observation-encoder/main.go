@@ -17,6 +17,7 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/cert"
 	"github.com/dnstapir/observation-encoder/internal/nats"
 	"github.com/dnstapir/observation-encoder/internal/common"
+	"github.com/dnstapir/observation-encoder/internal/libtapir"
 	"github.com/dnstapir/observation-encoder/internal/logger"
 )
 
@@ -28,6 +29,7 @@ type conf struct {
 	Api   api.Conf  `toml:"api"`
 	Cert  cert.Conf `toml:"cert"`
     Nats  nats.Conf `toml:"nats"`
+    Libtapir  libtapir.Conf `toml:"libtapir"`
 }
 
 func main() {
@@ -110,8 +112,26 @@ func main() {
         os.Exit(-1)
     }
 
+    /*
+     ******************************************************************
+     ********************** SET UP LIBTAPIR ***************************
+     ******************************************************************
+     */
+	libtapirlog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Libtapir.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating libtapir log: %s", err)
+	}
 
-	// TODO create different loggers with different debug settings
+    mainConf.Libtapir.Log = libtapirlog
+    libtapirHandle, err := libtapir.Create(mainConf.Libtapir)
+    if err != nil {
+        log.Error("Could not create libtapir handle: %s", err)
+        os.Exit(-1)
+    }
+
     /*
      ******************************************************************
      ********************** SET UP MAIN APP ***************************
@@ -127,6 +147,7 @@ func main() {
 
 	mainConf.Log = applog
     mainConf.NatsHandle = natsHandle
+    mainConf.LibtapirHandle = libtapirHandle
 	appHandle, err := app.Create(mainConf.Conf)
 	if err != nil {
 		log.Error("Error creating application: '%s'", err)

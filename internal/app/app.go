@@ -18,12 +18,14 @@ type Conf struct {
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
     NatsHandle    nats
+    LibtapirHandle libtapir
 }
 
 type appHandle struct {
 	id      string
 	log     common.Logger
     natsHandle nats
+    libtapirHandle libtapir
 	address string
 	port    string
 	exitCh  chan<- common.Exit
@@ -39,10 +41,14 @@ type job struct {
 }
 
 type nats interface {
-	Watch(context.Context) (<-chan common.NatsMsg, error)
+	WatchObservations(context.Context) (<-chan common.NatsMsg, error)
 	RemovePrefix(string) string
     GetObservations(context.Context, string) (uint32, error)
     Shutdown() error
+}
+
+type libtapir interface {
+    GenerateObservationMsg(string, uint32) (string, error) // TODO set ttl?
 }
 
 func Create(conf Conf) (*appHandle, error) {
@@ -53,6 +59,10 @@ func Create(conf Conf) (*appHandle, error) {
 	}
 
 	if conf.NatsHandle == nil {
+		return nil, common.ErrBadHandle
+	}
+
+	if conf.LibtapirHandle == nil {
 		return nil, common.ErrBadHandle
 	}
 
@@ -69,6 +79,7 @@ func Create(conf Conf) (*appHandle, error) {
 	a.port = conf.Port
 	a.id = "main app"
     a.natsHandle = conf.NatsHandle
+    a.libtapirHandle = conf.LibtapirHandle
 
 	return a, nil
 }
@@ -78,7 +89,7 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	a.exitCh = exitCh
 	jobChan := make(chan job, 10)
 
-    natsInCh, err := a.natsHandle.Watch(ctx)
+    natsInCh, err := a.natsHandle.WatchObservations(ctx)
     if err != nil {
         a.log.Error("Error connecting to NATS: %s", err)
 	    a.exitCh <- common.Exit{ID: a.id, Err: err}
@@ -128,7 +139,12 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 
     domainRev := a.natsHandle.RemovePrefix(j.msg.Subject)
     domainSplit := strings.Split(domainRev, c_NATS_DELIM)
-    // TODO check split is not too short
+
+    if len(domainSplit) < 2 {
+        a.log.Warning("Incoming message subject %s has too few labels, ignoring...", j.msg.Subject)
+        return
+    }
+
     slices.Reverse(domainSplit)
 
     domain := strings.Join(domainSplit[:len(domainSplit)-2], c_NATS_DELIM)
@@ -142,6 +158,13 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
     }
 
     a.log.Debug("%s has observation vector %d", domain, obs)
+
+    obsJSON, err := a.libtapirHandle.GenerateObservationMsg(domain, obs)
+    if err != nil {
+        a.log.Error("Couldn't generate JSON observation: %s", err)
+    }
+
+    a.log.Debug(obsJSON) // TODO actual publish
 
 	return
 }

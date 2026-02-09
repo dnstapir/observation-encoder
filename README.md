@@ -35,4 +35,7 @@ port = "10001"
 url = "nats://127.0.0.1:4222"
 subject_prefix = "observations"
 ttl = 3600
+
+[libtapir]
+debug = true
 ```

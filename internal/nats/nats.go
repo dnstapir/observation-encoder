@@ -81,7 +81,7 @@ func (nc *natsClient) RemovePrefix(subject string) string {
      return subjectCut
 }
 
-func (nc *natsClient) Watch(ctx context.Context) (<-chan common.NatsMsg, error) {
+func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.NatsMsg, error) {
     subjectParts := []string{nc.subjectPrefix, c_NATS_GLOB}
     subject := strings.Join(subjectParts, c_NATS_DELIM)
     w, err := nc.kv.Watch(ctx, subject)
