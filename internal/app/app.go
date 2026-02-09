@@ -10,13 +10,13 @@ import (
 )
 
 const c_N_HANDLERS = 3
+const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
 	Log     common.Logger
 	Debug   bool `toml:"debug"`
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
-    SubjectPrefix string `toml:"subject_prefix"`
     NatsHandle    nats
 }
 
@@ -26,7 +26,6 @@ type appHandle struct {
     natsHandle nats
 	address string
 	port    string
-	subjectPrefix    string
 	exitCh  chan<- common.Exit
 	pm
 }
@@ -40,7 +39,8 @@ type job struct {
 }
 
 type nats interface {
-	WatchBucket(context.Context, string) (<-chan common.NatsMsg, error)
+	Watch(context.Context) (<-chan common.NatsMsg, error)
+	RemovePrefix(string) string
     GetObservations(context.Context, string) (uint32, error)
     Shutdown() error
 }
@@ -64,17 +64,11 @@ func Create(conf Conf) (*appHandle, error) {
 		return nil, common.ErrBadParam
 	}
 
-	if conf.SubjectPrefix == "" {
-        // TODO make sure is valid NATS subject
-		return nil, common.ErrBadParam
-	}
-
 	a.log = conf.Log
 	a.address = conf.Address
 	a.port = conf.Port
 	a.id = "main app"
     a.natsHandle = conf.NatsHandle
-    a.subjectPrefix = conf.SubjectPrefix
 
 	return a, nil
 }
@@ -84,7 +78,7 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	a.exitCh = exitCh
 	jobChan := make(chan job, 10)
 
-    natsInCh, err := a.natsHandle.WatchBucket(ctx, a.subjectPrefix)
+    natsInCh, err := a.natsHandle.Watch(ctx)
     if err != nil {
         a.log.Error("Error connecting to NATS: %s", err)
 	    a.exitCh <- common.Exit{ID: a.id, Err: err}
@@ -132,16 +126,12 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 func (a *appHandle) handleJob(ctx context.Context, j job) {
     a.log.Info("Got message on subject '%s'", j.msg.Subject)
 
-    domainRev, ok := strings.CutPrefix(j.msg.Subject, a.subjectPrefix)
-    if !ok {
-        a.log.Warning("Prefix mismatch for incoming msg subject, dropping...")
-        return
-    }
-    domainSplit := strings.Split(domainRev, ".")
+    domainRev := a.natsHandle.RemovePrefix(j.msg.Subject)
+    domainSplit := strings.Split(domainRev, c_NATS_DELIM)
     // TODO check split is not too short
     slices.Reverse(domainSplit)
 
-    domain := strings.Join(domainSplit[:len(domainSplit)-2], ".")
+    domain := strings.Join(domainSplit[:len(domainSplit)-2], c_NATS_DELIM)
 
     a.log.Debug("Extracted domain '%s'", domain)
 

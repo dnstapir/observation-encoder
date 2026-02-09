@@ -13,14 +13,16 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/common"
 )
 
-const c_BUCKET_NAME = "obs_bucket" // TODO make configurable
-const c_DEFAULT_TTL = 60             /* seconds */ // TODO make configurable
+const c_NATS_WILDCARD = common.NATS_WILDCARD
+const c_NATS_GLOB = common.NATS_GLOB
+const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
     Url           string `toml:"url"`
-	Debug         bool `toml:"debug"`
-    Bucket        string `toml:"bucket"` // TODO use
-    SubjectPrefix string `toml:"subject_prefix"` // TODO use
+	Debug         bool   `toml:"debug"`
+    Bucket        string `toml:"bucket"`
+    SubjectPrefix string `toml:"subject_prefix"`
+    Ttl           int    `toml:"ttl"`
 	Log           common.Logger
 }
 
@@ -28,6 +30,9 @@ type natsClient struct {
 	log        common.Logger
 	url        string
 	queue      string
+    bucket        string
+    subjectPrefix string
+    ttl           time.Duration
 	kv         jetstream.KeyValue
 }
 
@@ -41,6 +46,23 @@ func Create(conf Conf) (*natsClient, error) {
 	}
 	nc.log = conf.Log
 
+    if conf.Bucket == "" {
+        return nil, errors.New("no bucket name")
+    }
+
+    if conf.SubjectPrefix == "" {
+        return nil, errors.New("no subject prefix")
+    }
+
+    if conf.Ttl == 0 {
+        return nil, errors.New("zero ttl")
+    }
+
+
+    nc.bucket        = conf.Bucket
+    nc.subjectPrefix = strings.Trim(conf.SubjectPrefix, c_NATS_DELIM)
+    nc.ttl = time.Duration(conf.Ttl) * time.Second
+
 	err := nc.initNats()
 	if err != nil {
 		nc.log.Error("Error initializing NATS")
@@ -50,11 +72,21 @@ func Create(conf Conf) (*natsClient, error) {
 	return nc, nil
 }
 
-func (nc *natsClient) WatchBucket(ctx context.Context, prefix string) (<-chan common.NatsMsg, error) {
-    watchSubject := prefix + ".*.>"
-    w, err := nc.kv.Watch(ctx, watchSubject)
+func (nc *natsClient) RemovePrefix(subject string) string {
+     subjectCut, ok := strings.CutPrefix(subject, nc.subjectPrefix)
+     if !ok {
+         nc.log.Warning("Subject '%s' missing prefix '%s'", subject, nc.subjectPrefix)
+     }
+
+     return subjectCut
+}
+
+func (nc *natsClient) Watch(ctx context.Context) (<-chan common.NatsMsg, error) {
+    subjectParts := []string{nc.subjectPrefix, c_NATS_GLOB}
+    subject := strings.Join(subjectParts, c_NATS_DELIM)
+    w, err := nc.kv.Watch(ctx, subject)
 	if err != nil {
-        nc.log.Error("Couldn't watch '%s': %s", watchSubject, err)
+        nc.log.Error("Couldn't watch: %s", err)
 		return nil, err
 	}
 
@@ -76,17 +108,19 @@ func (nc *natsClient) WatchBucket(ctx context.Context, prefix string) (<-chan co
 		close(outCh)
 	}()
 
-	nc.log.Info("Watching subject '%s'", watchSubject)
+	nc.log.Info("Watching subject '%s'", subject)
 
 	return outCh, nil
 }
 
 func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint32, error) {
-    domSplit := strings.Split(strings.Trim(domain, "."), ".")
+    domSplit := strings.Split(strings.Trim(domain, c_NATS_DELIM), c_NATS_DELIM)
     slices.Reverse(domSplit)
-    domRev := strings.Join(domSplit, ".")
+    domRev := strings.Join(domSplit, c_NATS_DELIM)
 
-    ls, err := nc.kv.ListKeysFiltered(ctx, "observations.*." + domRev) // TODO use subject prefix
+    subjectParts := []string{nc.subjectPrefix, c_NATS_WILDCARD, domRev}
+    subject := strings.Join(subjectParts, c_NATS_DELIM)
+    ls, err := nc.kv.ListKeysFiltered(ctx, subject)
     if err != nil {
         nc.log.Error("Couldn't list keys for %s: %s", domain, err)
         return 0, err
@@ -94,7 +128,7 @@ func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint3
 
     var obs uint32
     for k := range ls.Keys() {
-        kSplit := strings.Split(k, ".")
+        kSplit := strings.Split(k, c_NATS_DELIM)
         flag := kSplit[1] // TODO avoid magic values
         flagUint, ok := common.OBS_MAP[flag]
         if !ok {
@@ -123,8 +157,8 @@ func (nc *natsClient) initNats() error {
 
 	kv, err := js.CreateKeyValue(ctx, // TODO let someone else provision this resource
 		jetstream.KeyValueConfig{
-			Bucket:         c_BUCKET_NAME,
-			LimitMarkerTTL: c_DEFAULT_TTL * time.Second, // TODO what is a good setting?
+			Bucket:         nc.bucket,
+			LimitMarkerTTL: nc.ttl,
 		})
 	if err != nil {
 		nc.log.Error("Error creating key value store in NATS: %s", err)
