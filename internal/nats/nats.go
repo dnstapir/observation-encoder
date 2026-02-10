@@ -136,10 +136,14 @@ func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint3
 	var obs uint32
 	for k := range ls.Keys() {
 		kSplit := strings.Split(k, c_NATS_DELIM)
+        if len(kSplit) < 2 {
+            a.log.Warning("Badly formatted key '%s'. Skipping...", k)
+            continue
+        }
 		flag := kSplit[1] // TODO avoid magic values
 		flagUint, ok := common.OBS_MAP[flag]
 		if !ok {
-			nc.log.Warning("Unrecognized flag '%s', ignoring...")
+			nc.log.Warning("Unrecognized flag '%s', ignoring...", flag)
 			continue
 		}
 		obs |= flagUint
