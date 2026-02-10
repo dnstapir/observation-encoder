@@ -91,7 +91,7 @@ func (nc *natsClient) RemovePrefix(subject string) string {
 func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.NatsMsg, error) {
 	subjectParts := []string{nc.subjectPrefix, c_NATS_GLOB}
 	subject := strings.Join(subjectParts, c_NATS_DELIM)
-	w, err := nc.kv.Watch(ctx, subject)
+	w, err := nc.kv.Watch(ctx, subject, jetstream.UpdatesOnly())
 	if err != nil {
 		nc.log.Error("Couldn't watch: %s", err)
 		return nil, err
@@ -165,6 +165,7 @@ func (nc *natsClient) initNats() error {
 	kv, err := js.CreateKeyValue(ctx, // TODO let someone else provision this resource
 		jetstream.KeyValueConfig{
 			Bucket:         nc.bucket,
+			TTL: nc.ttl,
 			LimitMarkerTTL: nc.ttl,
 		})
 	if err != nil {
