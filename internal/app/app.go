@@ -108,7 +108,11 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 MAIN_APP_LOOP:
 	for {
 		select {
-		case msg := <-natsInCh:
+		case msg, ok := <-natsInCh:
+			if !ok {
+				a.log.Warning("NATS channel closed, exiting main loop")
+				break MAIN_APP_LOOP
+			}
 			a.pm.natsInCount.Add(1)
 			j := job{
 				msg: msg,
