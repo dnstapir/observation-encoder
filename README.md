@@ -34,6 +34,7 @@ port = "10001"
 [nats]
 url = "nats://127.0.0.1:4222"
 subject_prefix = "observations"
+subject_southbound = "test.subject"
 ttl = 3600
 
 [libtapir]

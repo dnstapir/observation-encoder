@@ -44,6 +44,7 @@ type nats interface {
 	WatchObservations(context.Context) (<-chan common.NatsMsg, error)
 	RemovePrefix(string) string
 	GetObservations(context.Context, string) (uint32, error)
+    SendSouthboundObservation(string) error
 	Shutdown() error
 }
 
@@ -162,9 +163,15 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 	obsJSON, err := a.libtapirHandle.GenerateObservationMsg(domain, obs)
 	if err != nil {
 		a.log.Error("Couldn't generate JSON observation: %s", err)
+        return
 	}
 
-	a.log.Debug(obsJSON) // TODO actual publish
+    err = a.natsHandle.SendSouthboundObservation(obsJSON)
+	if err != nil {
+		a.log.Error("Couldn't send southbound observation: %s", err)
+	}
+
+    a.log.Debug("Done handling msg on subject %s", j.msg.Subject)
 
 	return
 }

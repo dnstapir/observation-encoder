@@ -22,6 +22,7 @@ type Conf struct {
 	Debug         bool   `toml:"debug"`
 	Bucket        string `toml:"bucket"`
 	SubjectPrefix string `toml:"subject_prefix"`
+	SubjectSouthbound string `toml:"subject_southbound"`
 	Ttl           int    `toml:"ttl"`
 	Log           common.Logger
 }
@@ -32,8 +33,10 @@ type natsClient struct {
 	queue         string
 	bucket        string
 	subjectPrefix string
+	subjectSouthbound string
 	ttl           time.Duration
 	kv            jetstream.KeyValue
+    conn          *nats.Conn
 }
 
 func Create(conf Conf) (*natsClient, error) {
@@ -54,12 +57,17 @@ func Create(conf Conf) (*natsClient, error) {
 		return nil, errors.New("no subject prefix")
 	}
 
+	if conf.SubjectSouthbound == "" {
+		return nil, errors.New("no southbound subject")
+	}
+
 	if conf.Ttl == 0 {
 		return nil, errors.New("zero ttl")
 	}
 
 	nc.bucket = conf.Bucket
 	nc.subjectPrefix = strings.Trim(conf.SubjectPrefix, c_NATS_DELIM)
+	nc.subjectSouthbound = strings.Trim(conf.SubjectSouthbound, c_NATS_DELIM)
 	nc.ttl = time.Duration(conf.Ttl) * time.Second
 
 	err := nc.initNats()
@@ -165,7 +173,22 @@ func (nc *natsClient) initNats() error {
 	}
 
 	nc.kv = kv
+    nc.conn = conn
 	nc.log.Debug("Nats key value store created successfully!")
+
+	return nil
+}
+
+func (nc *natsClient) SendSouthboundObservation(msg string) error {
+    // TODO really re-use connection to KV?
+    outMsg := []byte(msg)
+    err := nc.conn.Publish(nc.subjectSouthbound, outMsg)
+	if err != nil {
+        nc.log.Error("Couldn't publish %d bytes msg on %s", len(outMsg), nc.subjectSouthbound)
+		return err
+	} else {
+		nc.log.Debug("Successful publish on '%s'", nc.subjectSouthbound)
+	}
 
 	return nil
 }
