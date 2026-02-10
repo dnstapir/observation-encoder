@@ -85,7 +85,7 @@ func (nc *natsClient) RemovePrefix(subject string) string {
 		nc.log.Warning("Subject '%s' missing prefix '%s'", subject, nc.subjectPrefix)
 	}
 
-	return subjectCut
+	return strings.Trim(subjectCut, c_NATS_DELIM)
 }
 
 func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.NatsMsg, error) {

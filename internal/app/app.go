@@ -145,14 +145,15 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 	domainRev := a.natsHandle.RemovePrefix(j.msg.Subject)
 	domainSplit := strings.Split(domainRev, c_NATS_DELIM)
 
-	if len(domainSplit) < 2 {
+	if len(domainSplit) < 2 { /* at least one observation type and one DNS label */
 		a.log.Warning("Incoming message subject %s has too few labels, ignoring...", j.msg.Subject)
 		return
 	}
 
 	slices.Reverse(domainSplit)
 
-	domain := strings.Join(domainSplit[:len(domainSplit)-2], c_NATS_DELIM)
+    /* After reverse, observation type is at the end. Drop it, we just want the domain name */
+	domain := strings.Join(domainSplit[:len(domainSplit)-1], c_NATS_DELIM)
 
 	a.log.Debug("Extracted domain '%s'", domain)
 
