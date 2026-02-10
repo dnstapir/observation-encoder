@@ -137,7 +137,7 @@ func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint3
 	for k := range ls.Keys() {
 		kSplit := strings.Split(k, c_NATS_DELIM)
 		if len(kSplit) < 2 {
-			a.log.Warning("Badly formatted key '%s'. Skipping...", k)
+			nc.log.Warning("Badly formatted key '%s'. Skipping...", k)
 			continue
 		}
 		flag := kSplit[1] // TODO avoid magic values
