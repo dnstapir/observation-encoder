@@ -152,7 +152,7 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 
 	slices.Reverse(domainSplit)
 
-    /* After reverse, observation type is at the end. Drop it, we just want the domain name */
+	/* After reverse, observation type is at the end. Drop it, we just want the domain name */
 	domain := strings.Join(domainSplit[:len(domainSplit)-1], c_NATS_DELIM)
 
 	a.log.Debug("Extracted domain '%s'", domain)

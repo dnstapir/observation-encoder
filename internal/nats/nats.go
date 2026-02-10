@@ -136,10 +136,10 @@ func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint3
 	var obs uint32
 	for k := range ls.Keys() {
 		kSplit := strings.Split(k, c_NATS_DELIM)
-        if len(kSplit) < 2 {
-            a.log.Warning("Badly formatted key '%s'. Skipping...", k)
-            continue
-        }
+		if len(kSplit) < 2 {
+			a.log.Warning("Badly formatted key '%s'. Skipping...", k)
+			continue
+		}
 		flag := kSplit[1] // TODO avoid magic values
 		flagUint, ok := common.OBS_MAP[flag]
 		if !ok {
@@ -169,7 +169,7 @@ func (nc *natsClient) initNats() error {
 	kv, err := js.CreateKeyValue(ctx, // TODO let someone else provision this resource
 		jetstream.KeyValueConfig{
 			Bucket:         nc.bucket,
-			TTL: nc.ttl,
+			TTL:            nc.ttl,
 			LimitMarkerTTL: nc.ttl,
 		})
 	if err != nil {
