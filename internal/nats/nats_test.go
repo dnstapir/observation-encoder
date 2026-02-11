@@ -87,45 +87,45 @@ func TestRemovePrefix(t *testing.T) {
 
 func TestExtractObservationFromKey(t *testing.T) {
 	tests := map[string]struct {
-		input1 string
-		input2 string
-		expect uint32
+		input1    string
+		input2    string
+		expect    uint32
 		expectErr error
 	}{
 		"globally_new, one label prefix": {
-			input1: "obs",
-			input2: "obs.globally_new.xa.foo",
-			expect: 1,
+			input1:    "obs",
+			input2:    "obs.globally_new.xa.foo",
+			expect:    1,
 			expectErr: nil,
 		},
 		"globally_new, two label prefix": {
-			input1: "obs1.obs2",
-			input2: "obs1.obs2.globally_new.xa.foo",
-			expect: 1,
+			input1:    "obs1.obs2",
+			input2:    "obs1.obs2.globally_new.xa.foo",
+			expect:    1,
 			expectErr: nil,
 		},
 		"bad flag": {
-			input1: "obs1.obs2",
-			input2: "obs1.obs2.bad_flag.xa.foo",
-			expect: 0,
+			input1:    "obs1.obs2",
+			input2:    "obs1.obs2.bad_flag.xa.foo",
+			expect:    0,
 			expectErr: common.ErrBadFlag,
 		},
 		"too short key": {
-			input1: "obs1.obs2",
-			input2: "obs1.obs2.looptest",
-			expect: 0,
+			input1:    "obs1.obs2",
+			input2:    "obs1.obs2.looptest",
+			expect:    0,
 			expectErr: common.ErrBadKey,
 		},
 		"single-label key": {
-			input1: "obs",
-			input2: "obs.looptest.xa",
-			expect: 1024,
+			input1:    "obs",
+			input2:    "obs.looptest.xa",
+			expect:    1024,
 			expectErr: nil,
 		},
 		"long prefix, short domain name": {
-			input1: "a.b.c.d.e.f.g.h.j.k",
-			input2: "a.b.c.d.e.f.g.h.j.k.globally_new.xa",
-			expect: 1,
+			input1:    "a.b.c.d.e.f.g.h.j.k",
+			input2:    "a.b.c.d.e.f.g.h.j.k.globally_new.xa",
+			expect:    1,
 			expectErr: nil,
 		},
 	}
@@ -138,9 +138,9 @@ func TestExtractObservationFromKey(t *testing.T) {
 			}
 
 			got, err := nh.extractObservationFromKey(test.input2)
-            if err != test.expectErr {
+			if err != test.expectErr {
 				t.Fatalf("Got: '%s', Expected: '%s'", err, test.expectErr)
-            }
+			}
 
 			if got != test.expect {
 				t.Fatalf("Got: '%d', Expected: '%d'", got, test.expect)

@@ -68,7 +68,7 @@ func Create(conf Conf) (*natsClient, error) {
 		return nil, errors.New("zero ttl")
 	}
 
-    nc.url = conf.Url
+	nc.url = conf.Url
 	nc.bucket = conf.Bucket
 	nc.subjectPrefix = strings.Trim(conf.SubjectPrefix, c_NATS_DELIM)
 	nc.subjectSouthbound = strings.Trim(conf.SubjectSouthbound, c_NATS_DELIM)
@@ -125,7 +125,7 @@ func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.Nats
 }
 
 func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint32, error) {
-    subject := nc.genKeyFilterSubject(domain)
+	subject := nc.genKeyFilterSubject(domain)
 	ls, err := nc.kv.ListKeysFiltered(ctx, subject)
 	if err != nil {
 		nc.log.Error("Couldn't list keys for %s: %s", domain, err)
@@ -134,11 +134,11 @@ func (nc *natsClient) GetObservations(ctx context.Context, domain string) (uint3
 
 	var obs uint32
 	for k := range ls.Keys() {
-        flagUint, err := nc.extractObservationFromKey(k)
-        if err != nil {
-            nc.log.Warning("Couldn't extract observation: %s", err)
-            continue
-        }
+		flagUint, err := nc.extractObservationFromKey(k)
+		if err != nil {
+			nc.log.Warning("Couldn't extract observation: %s", err)
+			continue
+		}
 		obs |= flagUint
 	}
 
@@ -153,26 +153,26 @@ func (nc *natsClient) genKeyFilterSubject(domain string) string {
 	subjectParts := []string{nc.subjectPrefix, c_NATS_WILDCARD, domRev}
 	subject := strings.Join(subjectParts, c_NATS_DELIM)
 
-    return subject
+	return subject
 }
 
 func (nc *natsClient) extractObservationFromKey(key string) (uint32, error) {
-		kSplit := strings.Split(key, c_NATS_DELIM)
-        prefixLen := len(strings.Split(nc.subjectPrefix, c_NATS_DELIM))
+	kSplit := strings.Split(key, c_NATS_DELIM)
+	prefixLen := len(strings.Split(nc.subjectPrefix, c_NATS_DELIM))
 
-		if len(kSplit)-prefixLen < c_MIN_RAW_KEY_LEN {
-			nc.log.Error("Badly formatted key '%s'", key)
-            return 0, common.ErrBadKey
-		}
+	if len(kSplit)-prefixLen < c_MIN_RAW_KEY_LEN {
+		nc.log.Error("Badly formatted key '%s'", key)
+		return 0, common.ErrBadKey
+	}
 
-		flag := kSplit[prefixLen] /* Flag is first label after prefix */
-		flagUint, ok := common.OBS_MAP[flag]
-		if !ok {
-			nc.log.Error("Unrecognized flag '%s'", flag)
-            return 0, common.ErrBadFlag
-		}
+	flag := kSplit[prefixLen] /* Flag is first label after prefix */
+	flagUint, ok := common.OBS_MAP[flag]
+	if !ok {
+		nc.log.Error("Unrecognized flag '%s'", flag)
+		return 0, common.ErrBadFlag
+	}
 
-        return flagUint, nil
+	return flagUint, nil
 }
 
 func (nc *natsClient) initNats() error {
