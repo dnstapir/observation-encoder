@@ -61,7 +61,7 @@ func Create(conf Conf) (*natsClient, error) {
 		return nil, errors.New("no southbound subject")
 	}
 
-	if conf.Ttl == 0 {
+	if conf.Ttl <= 0 {
 		return nil, errors.New("zero ttl")
 	}
 
