@@ -10,23 +10,26 @@ import (
 	"syscall"
 	"time"
 
-	//"github.com/nats-io/nats.go"
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/dnstapir/observation-encoder/internal/api"
 	"github.com/dnstapir/observation-encoder/internal/app"
 	"github.com/dnstapir/observation-encoder/internal/cert"
 	"github.com/dnstapir/observation-encoder/internal/common"
+	"github.com/dnstapir/observation-encoder/internal/libtapir"
 	"github.com/dnstapir/observation-encoder/internal/logger"
+	"github.com/dnstapir/observation-encoder/internal/nats"
 )
 
 var commit = "BAD-BUILD"
 
 type conf struct {
 	app.Conf
-	Debug bool      `toml:"debug"`
-	Api   api.Conf  `toml:"api"`
-	Cert  cert.Conf `toml:"cert"`
+	Debug    bool          `toml:"debug"`
+	Api      api.Conf      `toml:"api"`
+	Cert     cert.Conf     `toml:"cert"`
+	Nats     nats.Conf     `toml:"nats"`
+	Libtapir libtapir.Conf `toml:"libtapir"`
 }
 
 func main() {
@@ -87,32 +90,103 @@ func main() {
 	confDecoder.Decode(&mainConf)
 	file.Close() // TODO okay to close here while also using defer above?
 
-	// TODO create different loggers with different debug settings
+	debugFlag = debugFlag || mainConf.Debug
+
+	/*
+	 ******************************************************************
+	 ********************** SET UP NATS *******************************
+	 ******************************************************************
+	 */
+	natslog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Nats.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating nats log: %s", err)
+	}
+
+	mainConf.Nats.Log = natslog
+	natsHandle, err := nats.Create(mainConf.Nats)
+	if err != nil {
+		log.Error("Could not create NATS handle: %s", err)
+		os.Exit(-1)
+	}
+
+	/*
+	 ******************************************************************
+	 ********************** SET UP LIBTAPIR ***************************
+	 ******************************************************************
+	 */
+	libtapirlog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Libtapir.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating libtapir log: %s", err)
+	}
+
+	mainConf.Libtapir.Log = libtapirlog
+	libtapirHandle, err := libtapir.Create(mainConf.Libtapir)
+	if err != nil {
+		log.Error("Could not create libtapir handle: %s", err)
+		os.Exit(-1)
+	}
+
+	/*
+	 ******************************************************************
+	 ********************** SET UP MAIN APP ***************************
+	 ******************************************************************
+	 */
 	applog, err := logger.Create(
 		logger.Conf{
 			Debug: debugFlag || mainConf.Debug,
 		})
 	if err != nil {
 		log.Error("Error creating app log: %s", err)
-	} else {
-		applog.Debug("Debug logging enabled")
 	}
 
 	mainConf.Log = applog
+	mainConf.NatsHandle = natsHandle
+	mainConf.LibtapirHandle = libtapirHandle
 	appHandle, err := app.Create(mainConf.Conf)
 	if err != nil {
 		log.Error("Error creating application: '%s'", err)
 		os.Exit(-1)
 	}
 
-	mainConf.Cert.Log = applog
+	/*
+	 ******************************************************************
+	 ********************** SET UP CERT HANDLER ***********************
+	 ******************************************************************
+	 */
+	certlog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Cert.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating cert log: %s", err)
+	}
+
+	mainConf.Cert.Log = certlog
 	certHandle, err := cert.Create(mainConf.Cert)
 	if err != nil {
 		log.Error("Error creating cert manager: '%s'", err)
 		os.Exit(-1)
 	}
 
-	mainConf.Api.Log = applog
+	/*
+	 ******************************************************************
+	 ********************** SET UP API ********************************
+	 ******************************************************************
+	 */
+	apilog, err := logger.Create(
+		logger.Conf{
+			Debug: debugFlag || mainConf.Api.Debug,
+		})
+	if err != nil {
+		log.Error("Error creating API log: %s", err)
+	}
+	mainConf.Api.Log = apilog
 	mainConf.Api.App = appHandle
 	mainConf.Api.Certs = certHandle
 	apiHandle, err := api.Create(mainConf.Api)
@@ -121,6 +195,11 @@ func main() {
 		os.Exit(-1)
 	}
 
+	/*
+	 ******************************************************************
+	 ********************** START RUNNING STUFF ***********************
+	 ******************************************************************
+	 */
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	defer close(sigChan)

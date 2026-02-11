@@ -15,6 +15,7 @@ import (
 
 type Conf struct {
 	Active  bool   `toml:"active"`
+	Debug   bool   `toml:"debug"`
 	Address string `toml:"address"`
 	Port    string `toml:"port"`
 	Log     common.Logger
@@ -33,7 +34,7 @@ type apiHandle struct {
 }
 
 type appHandle interface {
-	GetPingCount() int64
+	GetNatsInCount() int64
 }
 
 type certHandle interface {
@@ -79,7 +80,7 @@ func (a *apiHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 		return
 	}
 
-	http.HandleFunc("/api/ping", a.apiHandlePing)
+	http.HandleFunc("/api/nats_in", a.apiHandleNatsIn)
 
 	cfg := &tls.Config{GetCertificate: a.certs.GetCertificate}
 	srv := &http.Server{
@@ -116,11 +117,11 @@ func (a *apiHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	return
 }
 
-func (a *apiHandle) apiHandlePing(rw http.ResponseWriter, r *http.Request) {
-	n := a.app.GetPingCount()
+func (a *apiHandle) apiHandleNatsIn(rw http.ResponseWriter, r *http.Request) {
+	n := a.app.GetNatsInCount()
 
 	rw.Header().Set("Content-Type", "application/json; charset=utf-8")
 
-	msg := fmt.Sprintf("{\"pings\": %d}", n)
+	msg := fmt.Sprintf("{\"nats_in\": %d}", n)
 	rw.Write([]byte(msg))
 }
