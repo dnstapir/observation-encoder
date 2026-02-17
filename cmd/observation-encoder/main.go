@@ -110,7 +110,7 @@ func main() {
 	envNatsUrl, overrideNatsUrl := os.LookupEnv(c_ENVVAR_OVERRIDE_NATS_URL)
 	if overrideNatsUrl {
 		mainConf.Nats.Url = envNatsUrl
-        log.Info("Overriding NATS url with environment variable '%s'", c_ENVVAR_OVERRIDE_NATS_URL)
+		log.Info("Overriding NATS url with environment variable '%s'", c_ENVVAR_OVERRIDE_NATS_URL)
 	}
 
 	mainConf.Nats.Log = natslog

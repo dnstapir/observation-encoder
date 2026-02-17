@@ -14,7 +14,7 @@ const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
 	Log            common.Logger
-	Debug          bool   `toml:"debug"`
+	Debug          bool `toml:"debug"`
 	NatsHandle     nats
 	LibtapirHandle libtapir
 }
