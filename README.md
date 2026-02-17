@@ -19,9 +19,6 @@ observation-encoder -config /path/to/config/file
 # Sample config file
 
 ```toml
-address = "127.0.0.1"
-port = "10000"
-
 [cert]
 interval = 100
 cert_dir = "/path/to/certs/dir"
