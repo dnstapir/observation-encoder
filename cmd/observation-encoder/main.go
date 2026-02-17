@@ -21,6 +21,8 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/nats"
 )
 
+const c_ENVVAR_OVERRIDE_NATS_URL = "DNSTAPIR_NATS_URL"
+
 var commit = "BAD-BUILD"
 
 type conf struct {
@@ -103,6 +105,12 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating nats log: %s", err)
+	}
+
+	envNatsUrl, overrideNatsUrl := os.LookupEnv(c_ENVVAR_OVERRIDE_NATS_URL)
+	if overrideNatsUrl {
+		mainConf.Nats.Url = envNatsUrl
+        log.Info("Overriding NATS url with environment variable '%s'", c_ENVVAR_OVERRIDE_NATS_URL)
 	}
 
 	mainConf.Nats.Log = natslog

@@ -15,8 +15,6 @@ const c_NATS_DELIM = common.NATS_DELIM
 type Conf struct {
 	Log            common.Logger
 	Debug          bool   `toml:"debug"`
-	Address        string `toml:"address"`
-	Port           string `toml:"port"`
 	NatsHandle     nats
 	LibtapirHandle libtapir
 }
@@ -26,8 +24,6 @@ type appHandle struct {
 	log            common.Logger
 	natsHandle     nats
 	libtapirHandle libtapir
-	address        string
-	port           string
 	exitCh         chan<- common.Exit
 	pm
 }
@@ -67,17 +63,7 @@ func Create(conf Conf) (*appHandle, error) {
 		return nil, common.ErrBadHandle
 	}
 
-	if conf.Address == "" {
-		return nil, common.ErrBadParam
-	}
-
-	if conf.Port == "" {
-		return nil, common.ErrBadParam
-	}
-
 	a.log = conf.Log
-	a.address = conf.Address
-	a.port = conf.Port
 	a.id = "main app"
 	a.natsHandle = conf.NatsHandle
 	a.libtapirHandle = conf.LibtapirHandle
