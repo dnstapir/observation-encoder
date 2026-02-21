@@ -13,26 +13,33 @@ sudo make install
 # Run
 
 ```
-observation-encoder -config /path/to/config/file
+observation-encoder
 ```
 
 # Sample config file
 
 ```toml
-[cert]
-interval = 100
-cert_dir = "/path/to/certs/dir"
-
-[api]
-active = true
-address = "127.0.0.1"
-port = "10001"
+debug = true
+ttl_margin = 5 # five seconds added to outgoing observations TTL
 
 [nats]
 url = "nats://127.0.0.1:4222"
-subject_prefix = "observations"
-subject_southbound = "test.subject"
-ttl = 3600
+subject_southbound = "leontest.down.tapir-pop"
+observation_subject_prefix = "leontest.observations"
+
+[[nats.buckets]]
+name = "globally_new"
+ttl = 30
+
+[[nats.buckets]]
+name = "looptest"
+ttl = 10
+
+[cert]
+active = false
+
+[api]
+active = false
 
 [libtapir]
 debug = true

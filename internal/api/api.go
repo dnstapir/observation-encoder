@@ -43,6 +43,12 @@ type certHandle interface {
 
 func Create(conf Conf) (*apiHandle, error) {
 	a := new(apiHandle)
+	a.id = "api"
+	a.active = conf.Active
+
+	if !a.active {
+		return a, nil
+	}
 
 	if conf.Log == nil {
 		return nil, common.ErrBadHandle
@@ -69,7 +75,6 @@ func Create(conf Conf) (*apiHandle, error) {
 	a.certs = conf.Certs
 	a.listenInterface = net.JoinHostPort(conf.Address, conf.Port)
 	a.active = conf.Active
-	a.id = "api"
 
 	return a, nil
 }
@@ -82,7 +87,10 @@ func (a *apiHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 
 	http.HandleFunc("/api/nats_in", a.apiHandleNatsIn)
 
-	cfg := &tls.Config{GetCertificate: a.certs.GetCertificate}
+	cfg := &tls.Config{
+		GetCertificate: a.certs.GetCertificate,
+		MinVersion:     tls.VersionTLS12,
+	}
 	srv := &http.Server{
 		TLSConfig:    cfg,
 		Addr:         a.listenInterface,

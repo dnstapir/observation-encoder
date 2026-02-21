@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"github.com/dnstapir/observation-encoder/internal/common"
@@ -13,14 +14,16 @@ const c_N_HANDLERS = 3
 const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
-	Log            common.Logger
 	Debug          bool `toml:"debug"`
+	TtlMargin      int  `toml:"ttl_margin"`
+	Log            common.Logger
 	NatsHandle     nats
 	LibtapirHandle libtapir
 }
 
 type appHandle struct {
 	id             string
+	ttlMargin      int
 	log            common.Logger
 	natsHandle     nats
 	libtapirHandle libtapir
@@ -39,13 +42,13 @@ type job struct {
 type nats interface {
 	WatchObservations(context.Context) (<-chan common.NatsMsg, error)
 	RemovePrefix(string) string
-	GetObservations(context.Context, string) (uint32, error)
+	GetObservations(context.Context, string) (uint32, int, error)
 	SendSouthboundObservation(string) error
 	Shutdown() error
 }
 
 type libtapir interface {
-	GenerateObservationMsg(string, uint32) (string, error) // TODO set ttl?
+	GenerateObservationMsg(string, uint32, int) (string, error) // TODO set ttl?
 }
 
 func Create(conf Conf) (*appHandle, error) {
@@ -63,8 +66,14 @@ func Create(conf Conf) (*appHandle, error) {
 		return nil, common.ErrBadHandle
 	}
 
+	// TODO what is a reasonale safety margin (in seconds) for adding to outgoing TTL?
+	if conf.TtlMargin < 0 || conf.TtlMargin > 3600 {
+		return nil, common.ErrBadParam
+	}
+
 	a.log = conf.Log
 	a.id = "main app"
+	a.ttlMargin = conf.TtlMargin
 	a.natsHandle = conf.NatsHandle
 	a.libtapirHandle = conf.LibtapirHandle
 
@@ -83,12 +92,14 @@ func (a *appHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 		return
 	}
 
+	var wg sync.WaitGroup
 	for range c_N_HANDLERS {
-		go func() {
+		wg.Go(func() {
 			for j := range jobChan {
 				a.handleJob(ctx, j)
 			}
-		}()
+			a.log.Info("Worker done!")
+		})
 	}
 
 MAIN_APP_LOOP:
@@ -110,10 +121,9 @@ MAIN_APP_LOOP:
 		}
 	}
 
-	for len(jobChan) > 0 {
-		<-jobChan
-	}
 	close(jobChan)
+
+	wg.Wait()
 
 	err = a.natsHandle.Shutdown()
 	if err != nil {
@@ -143,15 +153,20 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 
 	a.log.Debug("Extracted domain '%s'", domain)
 
-	obs, err := a.natsHandle.GetObservations(ctx, domain)
+	obs, ttl, err := a.natsHandle.GetObservations(ctx, domain)
 	if err != nil {
 		a.log.Error("Could not get observations for %s: %s", domain, err)
 		return
 	}
 
+	if obs == 0 || ttl == 0 {
+		a.log.Debug("Observation for %s has value %d and ttl %d, won't bother sending", domain, obs, ttl)
+		return
+	}
+
 	a.log.Debug("%s has observation vector %d", domain, obs)
 
-	obsJSON, err := a.libtapirHandle.GenerateObservationMsg(domain, obs)
+	obsJSON, err := a.libtapirHandle.GenerateObservationMsg(domain, obs, int(ttl)+a.ttlMargin)
 	if err != nil {
 		a.log.Error("Couldn't generate JSON observation: %s", err)
 		return

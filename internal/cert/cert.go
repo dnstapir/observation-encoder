@@ -6,7 +6,6 @@ import (
 	"errors"
 	"math"
 	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -16,16 +15,18 @@ import (
 )
 
 type Conf struct {
-	Log      common.Logger
+	Active   bool   `toml:"active"`
 	Debug    bool   `toml:"debug"`
 	Interval int    `toml:"interval"`
 	CertDir  string `toml:"cert_dir"`
+	Log      common.Logger
 }
 
 type certHandle struct {
 	sync.RWMutex
 
 	id      string
+	active  bool
 	log     common.Logger
 	ticker  *time.Ticker
 	certDir string
@@ -33,19 +34,25 @@ type certHandle struct {
 }
 
 func Create(conf Conf) (*certHandle, error) {
+	c := new(certHandle)
+	c.id = "cert manager"
+	c.active = conf.Active
+
+	if !c.active {
+		return c, nil
+	}
+
 	if conf.Log == nil {
 		return nil, common.ErrBadHandle
 	}
 
-	c := new(certHandle)
-	c.id = "cert manager"
 	c.log = conf.Log
 
 	if conf.CertDir == "" {
 		return nil, common.ErrBadParam
 	}
 
-	c.certDir = path.Clean(conf.CertDir)
+	c.certDir = filepath.Clean(conf.CertDir)
 	if conf.Interval > 0 {
 		c.ticker = time.NewTicker(time.Duration(conf.Interval) * time.Second)
 	} else {
@@ -62,10 +69,15 @@ func Create(conf Conf) (*certHandle, error) {
 		return nil, err
 	}
 
+	c.log.Debug("Cert handler debug logging enabled")
 	return c, nil
 }
 
 func (c *certHandle) GetCertificate(info *tls.ClientHelloInfo) (*tls.Certificate, error) {
+	if !c.active {
+		return nil, errors.New("cert handler inactive")
+	}
+
 	keys := make([]string, 0)
 	c.RLock()
 	defer c.RUnlock()
@@ -102,6 +114,11 @@ func (c *certHandle) GetCertificate(info *tls.ClientHelloInfo) (*tls.Certificate
 }
 
 func (c *certHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
+	if !c.active {
+		exitCh <- common.Exit{ID: c.id, Err: nil}
+		return
+	}
+
 	defer c.ticker.Stop()
 
 CERT_LOOP:
