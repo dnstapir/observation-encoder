@@ -38,8 +38,8 @@ func TestGenKeyFilterSubject(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			nh := natsClient{
-				log:           log,
-				subjectPrefix: test.input1,
+				log:                      log,
+				observationSubjectPrefix: test.input1,
 			}
 
 			got := nh.genKeyFilterSubject(test.input2)
@@ -72,8 +72,8 @@ func TestRemovePrefix(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			nh := natsClient{
-				log:           log,
-				subjectPrefix: test.input1,
+				log:                      log,
+				observationSubjectPrefix: test.input1,
 			}
 
 			got := nh.RemovePrefix(test.input2)
@@ -133,8 +133,8 @@ func TestExtractObservationFromKey(t *testing.T) {
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			nh := natsClient{
-				log:           log,
-				subjectPrefix: test.input1,
+				log:                      log,
+				observationSubjectPrefix: test.input1,
 			}
 
 			got, err := nh.extractObservationFromKey(test.input2)

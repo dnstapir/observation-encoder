@@ -21,8 +21,9 @@ import (
 	"github.com/dnstapir/observation-encoder/internal/nats"
 )
 
-const c_ENVVAR_OVERRIDE_NATS_URL = "DNSTAPIR_NATS_URL"
+const env_DNSTAPIR_NATS_URL = "DNSTAPIR_NATS_URL"
 
+/* Rewritten if building with make */
 var commit = "BAD-BUILD"
 
 type conf struct {
@@ -84,13 +85,16 @@ func main() {
 
 	confDecoder := toml.NewDecoder(file)
 	if confDecoder == nil {
-		log.Error("Problem decoding config file '%s', exiting...", configFile)
+		log.Error("Problem creating decoder for config file '%s', exiting...", configFile)
 		os.Exit(-1)
 	}
 
 	confDecoder.DisallowUnknownFields()
-	confDecoder.Decode(&mainConf)
-	file.Close() // TODO okay to close here while also using defer above?
+	err = confDecoder.Decode(&mainConf)
+	if err != nil {
+		log.Error("Problem decoding config file '%s': %s", configFile, err)
+		os.Exit(-1)
+	}
 
 	debugFlag = debugFlag || mainConf.Debug
 
@@ -105,12 +109,13 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating nats log: %s", err)
+		os.Exit(-1)
 	}
 
-	envNatsUrl, overrideNatsUrl := os.LookupEnv(c_ENVVAR_OVERRIDE_NATS_URL)
+	envNatsUrl, overrideNatsUrl := os.LookupEnv(env_DNSTAPIR_NATS_URL)
 	if overrideNatsUrl {
 		mainConf.Nats.Url = envNatsUrl
-		log.Info("Overriding NATS url with environment variable '%s'", c_ENVVAR_OVERRIDE_NATS_URL)
+		log.Info("Overriding NATS url with environment variable '%s'", env_DNSTAPIR_NATS_URL)
 	}
 
 	mainConf.Nats.Log = natslog
@@ -131,6 +136,7 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating libtapir log: %s", err)
+		os.Exit(-1)
 	}
 
 	mainConf.Libtapir.Log = libtapirlog
@@ -151,6 +157,7 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating app log: %s", err)
+		os.Exit(-1)
 	}
 
 	mainConf.Log = applog
@@ -173,6 +180,7 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating cert log: %s", err)
+		os.Exit(-1)
 	}
 
 	mainConf.Cert.Log = certlog
@@ -193,6 +201,7 @@ func main() {
 		})
 	if err != nil {
 		log.Error("Error creating API log: %s", err)
+		os.Exit(-1)
 	}
 	mainConf.Api.Log = apilog
 	mainConf.Api.App = appHandle
@@ -214,20 +223,18 @@ func main() {
 	defer signal.Stop(sigChan)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	exitCh := make(chan common.Exit)
+	exitCh := make(chan common.Exit, 10) // TODO adjustable buffer?
 
 	log.Info("Starting threads...")
 
-	go appHandle.Run(ctx, exitCh)
-
-	go apiHandle.Run(ctx, exitCh)
-	go certHandle.Run(ctx, exitCh)
+	var wg sync.WaitGroup
+	wg.Go(func() { appHandle.Run(ctx, exitCh) })
+	wg.Go(func() { apiHandle.Run(ctx, exitCh) })
+	wg.Go(func() { certHandle.Run(ctx, exitCh) })
 
 	log.Info("Threads started!")
 
 	exitLoop := false
-	var wg sync.WaitGroup
-	wg.Add(1)
 	for {
 		select {
 		case s, ok := <-sigChan:
@@ -255,45 +262,29 @@ func main() {
 		}
 		if exitLoop || (sigChan == nil && exitCh == nil) {
 			log.Info("Leaving toplevel loop")
-			wg.Done()
 			break
 		}
 	}
 
-	log.Info("Cancelling, giving threads some time to finish...")
+	log.Info("Cancelling threads")
 	cancel()
-	timeout := make(chan bool, 1)
+
+	log.Info("Waiting for threads to finish")
+
+	done := make(chan struct{})
 	go func() {
-		time.Sleep(2 * time.Second)
-		timeout <- true
+		wg.Wait()
+		close(done)
 	}()
 
-TIMEOUT_LOOP:
-	for {
-		select {
-		case exit, ok := <-exitCh:
-			if ok {
-				if exit.Err != nil {
-					log.Error("%s exited with error: '%s'", exit.ID, exit.Err)
-				} else {
-					log.Info("%s done!", exit.ID)
-				}
-			} else {
-				log.Info("exit channel was closed during shutdown")
-				exitCh = nil
-			}
-		case <-timeout:
-			log.Debug("Time's up. Proceeding with shutdown.")
-			break TIMEOUT_LOOP
-		}
-		if exitCh == nil {
-			log.Warning("exit channel closed unexpectedly")
-			break TIMEOUT_LOOP
-		}
+	const shutdownTimeout = 30 * time.Second
+	select {
+	case <-done:
+		log.Info("Threads finished")
+	case <-time.After(shutdownTimeout):
+		log.Error("Timed out waiting for threads to finish after %s", shutdownTimeout)
 	}
 
-	close(exitCh)
-	wg.Wait()
 	log.Info("Exiting...")
 	os.Exit(0)
 }

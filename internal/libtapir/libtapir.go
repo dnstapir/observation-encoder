@@ -29,18 +29,18 @@ func Create(conf Conf) (*libtapir, error) {
 	return lt, nil
 }
 
-func (lt *libtapir) GenerateObservationMsg(domainStr string, flags uint32) (string, error) {
+func (lt *libtapir) GenerateObservationMsg(domainStr string, flags uint32, ttl int) (string, error) {
 	domain := tapir.Domain{
 		Name:         domainStr,
 		TimeAdded:    time.Now(),
-		TTL:          3600,
+		TTL:          ttl,
 		TagMask:      tapir.TagMask(flags),
 		ExtendedTags: []string{},
 	}
 
 	tapirMsg := tapir.TapirMsg{
 		SrcName:   "dns-tapir",
-		Creator:   "tapir-analyse-new-qname",
+		Creator:   "observation-encoder",
 		MsgType:   "observation",
 		ListType:  "doubtlist",
 		Added:     []tapir.Domain{domain},
