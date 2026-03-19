@@ -87,21 +87,36 @@ func (a *apiHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 	go func() {
 		defer wg.Done()
 
-		err = srv.ListenAndServeTLS("", "")
+		err = srv.ListenAndServe()
 		if errors.Is(err, http.ErrServerClosed) {
 			a.log.Info("API server closing")
 			err = nil
 		} else {
 			a.log.Error("Unexpected API server shutdown: '%s'", err)
 		}
-
 	}()
 
 	<-ctx.Done()
 	a.log.Info("Shutting down API")
-	shutdownCtx, _ := context.WithTimeout(context.Background(), time.Second*2)
-	srv.Shutdown(shutdownCtx)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+	shutdownErr := srv.Shutdown(shutdownCtx)
 	wg.Wait()
+
+	/*
+	 * If server loop exited w/o error, but srv.Shutdown returned
+	 * an unexpected error, we send that on the exit channel.
+	 *
+	 * If server loop AND srv.Shutdown both return errors, the error
+	 * from srv.Shutdown will only be logged and not sent on the exit
+	 * channel.
+	 */
+	if shutdownErr != nil && !errors.Is(shutdownErr, http.ErrServerClosed) {
+		a.log.Error("Bad shutdown: %s", shutdownErr)
+		if err == nil {
+			err = shutdownErr
+		}
+	}
 
 	exitCh <- common.Exit{ID: a.id, Err: err}
 	a.log.Info("API server shutdown done")
