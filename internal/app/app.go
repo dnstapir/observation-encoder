@@ -7,7 +7,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dnstapir/observation-encoder/internal/common"
+	"github.com/dnstapir/tapir-analyse-lib/common"
 )
 
 const c_N_HANDLERS = 3

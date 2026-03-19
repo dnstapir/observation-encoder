@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
 	"net"
@@ -10,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dnstapir/observation-encoder/internal/common"
+	"github.com/dnstapir/tapir-analyse-lib/common"
 )
 
 type Conf struct {
@@ -20,7 +19,6 @@ type Conf struct {
 	Port    string `toml:"port"`
 	Log     common.Logger
 	App     appHandle
-	Certs   certHandle
 }
 
 type apiHandle struct {
@@ -29,16 +27,11 @@ type apiHandle struct {
 	log             common.Logger
 	listenInterface string
 	app             appHandle
-	certs           certHandle
 	srv             http.Server
 }
 
 type appHandle interface {
 	GetNatsInCount() int64
-}
-
-type certHandle interface {
-	GetCertificate(*tls.ClientHelloInfo) (*tls.Certificate, error)
 }
 
 func Create(conf Conf) (*apiHandle, error) {
@@ -51,10 +44,6 @@ func Create(conf Conf) (*apiHandle, error) {
 	}
 
 	if conf.Log == nil {
-		return nil, common.ErrBadHandle
-	}
-
-	if conf.Certs == nil {
 		return nil, common.ErrBadHandle
 	}
 
@@ -72,7 +61,6 @@ func Create(conf Conf) (*apiHandle, error) {
 
 	a.log = conf.Log
 	a.app = conf.App
-	a.certs = conf.Certs
 	a.listenInterface = net.JoinHostPort(conf.Address, conf.Port)
 	a.active = conf.Active
 
@@ -87,12 +75,7 @@ func (a *apiHandle) Run(ctx context.Context, exitCh chan<- common.Exit) {
 
 	http.HandleFunc("/api/nats_in", a.apiHandleNatsIn)
 
-	cfg := &tls.Config{
-		GetCertificate: a.certs.GetCertificate,
-		MinVersion:     tls.VersionTLS12,
-	}
 	srv := &http.Server{
-		TLSConfig:    cfg,
 		Addr:         a.listenInterface,
 		ReadTimeout:  time.Minute,
 		WriteTimeout: time.Minute,
