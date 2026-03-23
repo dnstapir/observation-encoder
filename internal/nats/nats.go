@@ -275,6 +275,12 @@ func (nc *natsClient) initNats(buckets []BucketConf) error {
 				LimitMarkerTTL: time.Duration(1) * time.Second,
 				Description:    fmt.Sprintf("TTL: %d seconds", b.Ttl),
 			})
+
+		if errors.Is(err, jetstream.ErrBucketExists) { // TODO config parameter for disabling this behavior?
+			nc.log.Warning("A bucket called '%s' already exists in NATS, but with different config. Will attemp to re-use.", b.Name)
+			kv, err = nc.attemptReuseBucket(ctx, js, b.Name)
+		}
+
 		if err != nil {
 			nc.log.Error("Error creating key value store in NATS: %s. Skipping...", err)
 			continue
@@ -312,4 +318,25 @@ func (nc *natsClient) Shutdown() error {
 	nc.wg.Wait()
 	// TODO NATS shutdown
 	return nil
+}
+
+func (nc *natsClient) attemptReuseBucket(ctx context.Context, js jetstream.JetStream, bucket string) (jetstream.KeyValue, error) {
+	kv, err := js.KeyValue(ctx, bucket)
+	if err != nil {
+		nc.log.Error("Couldn't find existing bucket '%s'")
+		return nil, err
+	}
+
+	status, err := kv.Status(ctx)
+	if err != nil {
+		nc.log.Error("Couldn't get status of existing bucket '%s': %s", bucket, err)
+		return nil, err
+	}
+
+	ttl := status.TTL() / time.Second
+	lmTtl := status.LimitMarkerTTL() / time.Second
+	size := float32(status.Bytes()) / 1000000 /* In megabytes */
+	nc.log.Info("Reusing bucket '%s'. TTL: %d, LimitMarketTTL: %d, Size: %.2f MB.", status.Bucket(), ttl, lmTtl, size)
+
+	return kv, nil
 }
