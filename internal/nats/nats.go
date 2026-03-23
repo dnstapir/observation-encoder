@@ -3,6 +3,7 @@ package nats
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -12,7 +13,7 @@ import (
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 
-	"github.com/dnstapir/observation-encoder/internal/common"
+	"github.com/dnstapir/tapir-analyse-lib/common"
 )
 
 const c_NATS_WILDCARD = common.NATS_WILDCARD
@@ -232,13 +233,13 @@ func (nc *natsClient) extractObservationFromKey(key string) (uint32, error) {
 	}
 
 	flag := kSplit[prefixLen] /* Flag is first label after prefix */
-	flagUint, ok := common.OBS_MAP[flag]
+	obsEnc, ok := common.OBS_MAP[flag]
 	if !ok {
 		nc.log.Error("Unrecognized flag '%s'", flag)
 		return 0, common.ErrBadFlag
 	}
 
-	return flagUint, nil
+	return obsEnc, nil
 }
 
 func (nc *natsClient) initNats(buckets []BucketConf) error {
@@ -272,6 +273,7 @@ func (nc *natsClient) initNats(buckets []BucketConf) error {
 				Bucket:         b.Name,
 				TTL:            time.Duration(b.Ttl) * time.Second,
 				LimitMarkerTTL: time.Duration(1) * time.Second,
+				Description:    fmt.Sprintf("TTL: %d seconds", b.Ttl),
 			})
 		if err != nil {
 			nc.log.Error("Error creating key value store in NATS: %s. Skipping...", err)

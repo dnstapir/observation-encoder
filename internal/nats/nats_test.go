@@ -3,11 +3,11 @@ package nats
 import (
 	"testing"
 
-	"github.com/dnstapir/observation-encoder/internal/common"
-	"github.com/dnstapir/observation-encoder/internal/logger"
+	"github.com/dnstapir/tapir-analyse-lib/common"
+	"github.com/dnstapir/tapir-analyse-lib/logger"
 )
 
-var log, _ = logger.Create(
+var log = logger.New(
 	logger.Conf{
 		Debug: false,
 	})
