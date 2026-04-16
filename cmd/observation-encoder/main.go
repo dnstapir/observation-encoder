@@ -12,7 +12,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/dnstapir/tapir-analyse-lib/common"
-	"github.com/dnstapir/tapir-analyse-lib/libtapir"
 	"github.com/dnstapir/tapir-analyse-lib/logger"
 
 	"github.com/dnstapir/observation-encoder/internal/api"
@@ -27,10 +26,9 @@ var commit = "BAD-BUILD"
 
 type conf struct {
 	app.Conf
-	Debug    bool          `toml:"debug"`
-	Api      api.Conf      `toml:"api"`
-	Nats     nats.Conf     `toml:"nats"`
-	Libtapir libtapir.Conf `toml:"libtapir"`
+	Debug bool      `toml:"debug"`
+	Api   api.Conf  `toml:"api"`
+	Nats  nats.Conf `toml:"nats"`
 }
 
 func main() {
@@ -118,13 +116,6 @@ func main() {
 
 	/*
 	 ******************************************************************
-	 ********************** SET UP LIBTAPIR ***************************
-	 ******************************************************************
-	 */
-	libtapirHandle := libtapir.New(mainConf.Libtapir)
-
-	/*
-	 ******************************************************************
 	 ********************** SET UP MAIN APP ***************************
 	 ******************************************************************
 	 */
@@ -135,7 +126,6 @@ func main() {
 
 	mainConf.Log = applog
 	mainConf.NatsHandle = natsHandle
-	mainConf.LibtapirHandle = libtapirHandle
 	appHandle, err := app.Create(mainConf.Conf)
 	if err != nil {
 		log.Error("Error creating application: '%s'", err)

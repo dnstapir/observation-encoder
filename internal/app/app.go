@@ -8,26 +8,25 @@ import (
 	"sync/atomic"
 
 	"github.com/dnstapir/tapir-analyse-lib/common"
+	"github.com/dnstapir/tapir-analyse-lib/libtapir"
 )
 
 const c_N_HANDLERS = 3
 const c_NATS_DELIM = common.NATS_DELIM
 
 type Conf struct {
-	Debug          bool `toml:"debug"`
-	TtlMargin      int  `toml:"ttl_margin"`
-	Log            common.Logger
-	NatsHandle     nats
-	LibtapirHandle libtapir
+	Debug      bool `toml:"debug"`
+	TtlMargin  int  `toml:"ttl_margin"`
+	Log        common.Logger
+	NatsHandle nats
 }
 
 type appHandle struct {
-	id             string
-	ttlMargin      int
-	log            common.Logger
-	natsHandle     nats
-	libtapirHandle libtapir
-	exitCh         chan<- common.Exit
+	id         string
+	ttlMargin  int
+	log        common.Logger
+	natsHandle nats
+	exitCh     chan<- common.Exit
 	pm
 }
 
@@ -47,10 +46,6 @@ type nats interface {
 	Shutdown() error
 }
 
-type libtapir interface {
-	GenerateObservationMsg(string, uint32, int) (string, error) // TODO set ttl?
-}
-
 func Create(conf Conf) (*appHandle, error) {
 	a := new(appHandle)
 
@@ -59,10 +54,6 @@ func Create(conf Conf) (*appHandle, error) {
 	}
 
 	if conf.NatsHandle == nil {
-		return nil, common.ErrBadHandle
-	}
-
-	if conf.LibtapirHandle == nil {
 		return nil, common.ErrBadHandle
 	}
 
@@ -75,7 +66,6 @@ func Create(conf Conf) (*appHandle, error) {
 	a.id = "main app"
 	a.ttlMargin = conf.TtlMargin
 	a.natsHandle = conf.NatsHandle
-	a.libtapirHandle = conf.LibtapirHandle
 
 	return a, nil
 }
@@ -166,7 +156,7 @@ func (a *appHandle) handleJob(ctx context.Context, j job) {
 
 	a.log.Debug("%s has observation vector %d", domain, obs)
 
-	obsJSON, err := a.libtapirHandle.GenerateObservationMsg(domain, obs, int(ttl)+a.ttlMargin)
+	obsJSON, err := libtapir.GenerateObservationMsg(domain, obs, int(ttl)+a.ttlMargin)
 	if err != nil {
 		a.log.Error("Couldn't generate JSON observation: %s", err)
 		return
