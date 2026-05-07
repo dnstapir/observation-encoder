@@ -5,7 +5,7 @@ go 1.26.1
 require (
 	github.com/dnstapir/tapir-analyse-lib v0.0.0-20260414104340-0e06dc6a4691
 	github.com/nats-io/nats.go v1.50.0
-	github.com/pelletier/go-toml/v2 v2.2.4
+	github.com/pelletier/go-toml/v2 v2.3.1
 )
 
 require (
