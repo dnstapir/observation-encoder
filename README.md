@@ -26,6 +26,8 @@ ttl_margin = 5 # five seconds added to outgoing observations TTL
 url = "nats://127.0.0.1:4222"
 subject_southbound = "leontest.down.tapir-pop"
 observation_subject_prefix = "leontest.observations"
+key_channel_size = 1024
+out_channel_size = 1024
 
 [[nats.buckets]]
 name = "globally_new"

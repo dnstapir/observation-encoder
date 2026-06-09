@@ -20,12 +20,16 @@ const c_NATS_WILDCARD = common.NATS_WILDCARD
 const c_NATS_GLOB = common.NATS_GLOB
 const c_NATS_DELIM = common.NATS_DELIM
 const c_MIN_RAW_KEY_LEN = 2 /* At least one flag label and one DNS label (not counting prefix) */
+const c_DEFAULT_AGGR_KEY_CHAN_SIZE = 128
+const c_DEFAULT_OUT_CHAN_SIZE = 32
 
 type Conf struct {
 	Debug                    bool         `toml:"debug"`
 	Url                      string       `toml:"url"`
 	SubjectSouthbound        string       `toml:"subject_southbound"`
 	ObservationSubjectPrefix string       `toml:"observation_subject_prefix"`
+	KeyChanSize              int          `toml:"key_channel_size"`
+	OutChanSize              int          `toml:"out_channel_size"`
 	Buckets                  []BucketConf `toml:"buckets"`
 	Log                      common.Logger
 }
@@ -39,6 +43,8 @@ type natsClient struct {
 	url                      string
 	subjectSouthbound        string
 	observationSubjectPrefix string
+	keyChanSize              int
+	outChanSize              int
 	kvs                      []jetstream.KeyValue
 	conn                     *nats.Conn
 	log                      common.Logger
@@ -57,6 +63,18 @@ func Create(conf Conf) (*natsClient, error) {
 		return nil, errors.New("no nats url")
 	}
 	nc.url = conf.Url
+
+	nc.keyChanSize = conf.KeyChanSize
+	if nc.keyChanSize <= 0 {
+		nc.log.Warning("Bad config for aggregated key channel buffer provided, using default: %d", c_DEFAULT_AGGR_KEY_CHAN_SIZE)
+		nc.keyChanSize = c_DEFAULT_AGGR_KEY_CHAN_SIZE
+	}
+
+	nc.outChanSize = conf.OutChanSize
+	if nc.outChanSize <= 0 {
+		nc.log.Warning("Bad config for out channel buffer provided, using default: %d", c_DEFAULT_OUT_CHAN_SIZE)
+		nc.outChanSize = c_DEFAULT_OUT_CHAN_SIZE
+	}
 
 	if len(conf.Buckets) == 0 {
 		return nil, errors.New("no buckets")
@@ -91,8 +109,8 @@ func (nc *natsClient) RemovePrefix(subject string) string {
 }
 
 func (nc *natsClient) WatchObservations(ctx context.Context) (<-chan common.NatsMsg, error) {
-	aggrKeyChan := make(chan jetstream.KeyValueEntry, 128) // TODO adjustable buffer size?
-	outCh := make(chan common.NatsMsg, 32)                 // TODO adjustable buffer size?
+	aggrKeyChan := make(chan jetstream.KeyValueEntry, nc.keyChanSize)
+	outCh := make(chan common.NatsMsg, nc.outChanSize)
 	atLeastOneBucket := false
 
 	for _, kv := range nc.kvs {
