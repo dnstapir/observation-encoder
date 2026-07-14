@@ -13,10 +13,10 @@ import (
 
 	"github.com/dnstapir/tapir-analyse-lib/common"
 	"github.com/dnstapir/tapir-analyse-lib/logger"
+	"github.com/dnstapir/tapir-analyse-lib/nats"
 
 	"github.com/dnstapir/observation-encoder/internal/api"
 	"github.com/dnstapir/observation-encoder/internal/app"
-	"github.com/dnstapir/observation-encoder/internal/nats"
 )
 
 const env_DNSTAPIR_NATS_URL = "DNSTAPIR_NATS_URL"
