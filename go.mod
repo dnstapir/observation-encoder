@@ -3,7 +3,7 @@ module github.com/dnstapir/observation-encoder
 go 1.26.1
 
 require (
-	github.com/dnstapir/tapir-analyse-lib v0.0.0-20260914122747-463e0022868d
+	github.com/dnstapir/tapir-analyse-lib v0.0.0-20261001114717-2d7148f6f79c
 	github.com/pelletier/go-toml/v2 v2.4.3
 )
 
